@@ -2,10 +2,12 @@
 
 Utilitaire portable (Windows / Linux) pour compresser des PDF. Un seul fichier, aucune installation.
 
+*D'après une proposition de Marie.*
+
 ## Utilisation
 
 **Interface graphique** : double-cliquez sur `pdfcompress` (Linux) ou `pdfcompress.exe` (Windows).
-Ajoutez des PDF, choisissez le niveau, cliquez sur *Compresser*. Les fichiers compresses sont
+Glissez vos PDF (ou un dossier) dans la fenetre, ou ajoutez-les par le bouton. Choisissez le niveau, cliquez sur *Compresser*. Les fichiers compresses sont
 enregistres a cote des originaux avec le suffixe `_compresse` (ou dans le dossier choisi).
 
 **Ligne de commande** :
@@ -18,10 +20,10 @@ pdfcompress scan.pdf -n extreme -g -o petit.pdf
 
 | Niveau   | Images      | Usage                         |
 |----------|-------------|-------------------------------|
-| faible   | 200 dpi, JPEG 85 | impression, meilleure qualite |
-| moyenne  | 130 dpi, JPEG 70 | recommande                    |
-| forte    | 90 dpi, JPEG 50  | ecran, e-mail                 |
-| extreme  | 72 dpi, JPEG 35  | plus petit possible           |
+| faible   | 200 dpi, JPEG 75 | impression, meilleure qualite |
+| moyenne  | 150 dpi, JPEG 55 | recommande                    |
+| forte    | 110 dpi, JPEG 40 | ecran, e-mail                 |
+| extreme  | 72 dpi, JPEG 30  | plus petit possible           |
 
 `-g` convertit les images en niveaux de gris.
 
@@ -34,7 +36,7 @@ passe sont refuses. L'original n'est jamais modifie.
 
 - **Windows** : installer Python 3.10+ (python.org), puis double-cliquer sur `build_windows.bat`.
 - **Linux** : `sudo apt install python3-tk python3-venv binutils` puis `./build_linux.sh`.
-- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.0.0` ;
+- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.1.0` ;
   `.github/workflows/build.yml` construit les executables a chaque push sur `main` et les publie
   dans la release `v<VERSION>` (version lue dans `pdfcompress.py`).
 
