@@ -40,7 +40,7 @@ passe sont refuses. L'original n'est jamais modifie.
 
 - **Windows** : installer Python 3.10+ (python.org), puis double-cliquer sur `build_windows.bat`.
 - **Linux** : `sudo apt install python3-tk python3-venv binutils` puis `./build_linux.sh`.
-- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.2.0` ;
+- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.3.0` ;
   `.github/workflows/build.yml` construit les executables a chaque push sur `main` et les publie
   dans la release `v<VERSION>` (version lue dans `pdfcompress.py`).
 

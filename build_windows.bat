@@ -14,7 +14,7 @@ if defined PYINSTALLER_COMPILE_BOOTLOADER (
 ) else (
   python -m pip install "pyinstaller>=6.0"
 )
-set COMMON=--windowed --noupx --name pdfcompress --version-file version_info.txt --exclude-module PIL --exclude-module numpy --noconfirm
+set COMMON=--windowed --noupx --name pdfcompress --version-file version_info.txt --exclude-module PIL --exclude-module numpy --noconfirm --icon assets\pdfcompress.ico --add-data "assets\pdfcompress.ico;."
 pyinstaller --onefile %COMMON% pdfcompress.py
 pyinstaller --onedir %COMMON% --distpath dist-dir --workpath build-dir pdfcompress.py
 echo.

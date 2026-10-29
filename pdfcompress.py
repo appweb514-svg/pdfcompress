@@ -15,8 +15,12 @@ import threading
 import pymupdf
 
 APP_NAME = "PDF Compress"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 CREDIT = "D'après une proposition de Marie"
+
+# Icône PDF (PNG encodé en base64, générée par tools/make_icon.py)
+ICON64_PNG = "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"
+ICON48_PNG = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAILUlEQVR42tWaXWwc1RXHf/femdnx7sYOcZzYMbFTCEtwPlGa8EAVpAoRkSIRVIiQGiSUClbAAxJPVaXKiVSRQAWVoJC6CGoQqFKiIoScF6KqCXlAhFoCQRFVix3i4CSQ2Gt7vd7dmXtvH2Z37YCTeNfrho50NdqZq5nzP+f8z9csXOWw1sqFWN3dVvL/fnR3d88bhLiM1oUQwr579ESHCflzIQikEMJaa8W8XiaEBYjF/CCbGf/1L3Zt7+/p6XHT6XRQ6zOd2S7u3YsA7DcXM42rO1f9dOO61UjEvDVusQDkCyEfffz5pp7X/npPes/PP5oPCOdKN8fzeVsoFsLFSV8A9nIWq/owWet57rIbUzceee5g7z3p9MMnawVxRR+UoRZYq7QxClDW2nktY4yy1qpQG0cHRd1xfVvL+rUbjjx3sHdrOp0Oenp63LoCmOG7lXO9lgWldag7O1Ys3bBuY1+tIK5pKLPWKqND3bmydktcUwBCgLVlS7QvrQXEtbYA1lqMsUqHge5cuWLp+q71fQdemDuIawZASoHrOpXlKKWksPrGGzpbtv741iMHew9tTafTQXd3t1NzGF1A1ZPLFRg+d4FSaijlCZQUaNd1l7a2tvcd7D10z2MP7zr5wAOH1OHDu/QPxgK+H6NzZStx3yXRML2SDS4NvqsaPKlTN6xs6VjZ2df99B9Wd3X9016u7HBq9d35+H28Icbm9TddaZsCzOjYREshN5k68Nt9AyUApi4AynlhIUg9sx4LgsCOjY0owDt79qyumwW+vThGbiqPlAI731AKGGNp8GO0NC+mrJtSwhNYo0quXh8AxliGhr9hYjKHkrJOAAzxuE/zkkaUqI6WTi3hb+3NqygGIfXyJGvBcx2UrD6m1ORCMc8l5rn8EA6nFqINnj5HNpdDijq5UCky3dC5AlmlWWuyQL5QYCpfrB8HrEHKqDBioQEIIehKrYpCnhDUBYG1NYfmmhOZ1qauvqyUrAlETRz47ItBJnJTKCErfe58TGCsIdHgs27Nj6qORDVZoKkxieOqOpLYEPf9qgk8KwAL8vDne52/33GH+SI3qTAGtIaoDUQAHe0tC9HezJ8DJVoaDu8rAjz+8l8yqyYzSMeZxyuqzGi1RqFyTDmdSm3xHCdVCMNw9Mk9Kye372D87L8XVHghBP7WrTjLl1cNwgE4BEqAHkylnopJ+RzG4EtJ69AguRd+x3mtpw0gJRgTvajc2F5aa0RnrWdvgmdqu3xNa5y2Nla8+Saxrq7o+XMks1PCq7/evDmen5j4VcFaCsYECCEJQ4jFlCgLbC02CJCJBMLzsGFYEdSWuGLDEIRAXXddRVBrTAW0NaYiuJAS4TjgOARDQ4y9/jrLnn0Wa8ycLT7tQpOTDdZapYUAKR0KBbHsmWeIrV2LUArh++jRUfL9/WRefZXgq6/wN29m2f79USLyfczkJMHgILnjx5l4912E52GyWZoefJCmPXuwWiPjcWwYIj2PTG8vmVdeQTU3I2IxTC5XO4mNlBatp5Fbi7dmDbG1awnPnCEYGiK2YQP+rbfScPvtnN6+HRmPE1u3DoDg1Cmctjb8TZtYdN99JO66i/NPPYUNApzWVmJdXdgwJDxzJrK54yCUmm5irJ2z28y5J7bZLBjDyEsv8dW2bXx9//2YXI7YLbfgb9qEGR8HY9AXLzK0cyentmxheM8e9OgoyR07aNq9GzM+jg0CMIbcsWP85+abGdyyhYGNG8m89hqqqQlb5ksNraq8SvEfLaUijXnezM4m0mRpj/A8hO8z8fbbTLzzDhhD4s47Ea5b2eelUix//nmWPf00yw8cwEulsIUCQtY+W3CuUqAAsOTxx2nctYtYVxfCcch//DH5Tz6h4bbbvrdfJZOEp0+DlMimJkQsVrntdnSw5IknKr+nTp6k8NlnkEwuEICySUtRZOrDD8n39zP2xhuRW8zUnDHYYhGdzeLddBMYgxkZwebzlwh8/sknEfE4WIu+cAGZTE67UN0BlMLkyIsvMvryy6glSyKTNzZG7qR1tIwBpRCuy3WPPMKinTtBSiaOHImEsxa0xkxOUhwYQCYSYEzkXnJ+o6krAhCJBCiFXLQImUwiFy2CRAJbjvuuG7lNczOdR48ifL/Ck7G33mLi0CFUYyM4TuU5wvcRDQ0Vq9a7pbQzCTz1wQeYTIbg1Kko4WgdCS4EwnEwmQy5Y8ciDbsudmoqygMnTjB5/HikadclGBgg9/775D/9NCJs2Sp1mDdVAPwrkxGdiYQCTFmgC/v3gzFCeB4ikagIDyB8n+KXX/L1Qw9Nc8DaimvIZBKsRSYSZN97j4m+vkpC/F5ZIQRSKYIgqLpodMqdaHp4ePyhjo7za+LxxROl2R7xOKac/i9X2yQSsw79CcNLo1kiUeHCbJofHRkhcf31laap2lJC/AmCbcXio3mte6SU7SbKjMq6XlxKcfkK8XJ+/N39M2qg7wpvgoD4vfdyy2OPRWVJKXzPGYAoDU13nzv3/mbYkG5fvTw7Oqxju3+5pvPun/3tJ1vWCRl9461/VW0tQiqSba0z5qNiuuirhsTdIPdB8OjwwBms4fc7djbGWppNU3t7fT+zzmFwLIS0YAVXyRGXANgXWUJ0b/uN2nt8n/7jxW99p2WpGs/mEQsquvheBLJYXM9HeTFZbR6we4/t1ULss71xLzs6lvlH39ETHtaK+f7VoDpLYF3XFUUzlQVEf39/TZ20Anxgcen8PwNQpj5QBMaA3Gwj9quNVWxbW5vN5XI5rXXhGgCw2Wy2CBSY5esMwH8B8IAknVmQe5QAAAAASUVORK5CYII="
 
 # niveau -> (dpi cible, qualité JPEG)
 PRESETS = {
@@ -317,7 +321,7 @@ def gui() -> None:
         tk._default_root = None
         root = tk.Tk()
     root.withdraw()
-    root.title(f"{APP_NAME} {VERSION}")
+    root.title(APP_NAME)
     root.configure(bg=C["bg"])
 
     fams = set(tkfont.families(root))
@@ -327,13 +331,20 @@ def gui() -> None:
     def F(size: int, weight: str = "normal"):
         return (base, size, weight)
 
-    # icône de fenêtre dessinée (pas de fichier externe)
-    ico = tk.PhotoImage(master=root, width=32, height=32)
-    ico.put(C["accent"], to=(5, 2, 27, 30))
-    ico.put(C["accent_hover"], to=(20, 2, 27, 9))
-    for y in (12, 17, 22):
-        ico.put("#FFFFFF", to=(10, y, 22, y + 2))
-    root.iconphoto(True, ico)
+    # icône PDF de la fenêtre et de la barre des tâches (intégrée, pas de fichier externe)
+    ico64 = tk.PhotoImage(master=root, data=ICON64_PNG)
+    ico48 = tk.PhotoImage(master=root, data=ICON48_PNG)
+    root.iconphoto(True, ico64, ico48)
+    root._icons = (ico64, ico48)  # garder une référence
+    if sys.platform == "win32":
+        # sous Windows, l'icône .ico embarquée dans l'exe sert aussi à la barre des tâches
+        ico_file = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))),
+                                "pdfcompress.ico")
+        if os.path.exists(ico_file):
+            try:
+                root.iconbitmap(default=ico_file)
+            except tk.TclError:
+                pass
 
     style = ttk.Style(root)
     try:
@@ -422,17 +433,13 @@ def gui() -> None:
     header.pack(side="top", fill="x")
     hin = tk.Frame(header, bg=C["header"])
     hin.pack(fill="x", padx=24, pady=16)
-    logo = tk.Canvas(hin, width=36, height=42, bg=C["header"], highlightthickness=0)
-    logo.create_polygon(2, 2, 24, 2, 34, 12, 34, 40, 2, 40, fill=C["accent"], outline="")
-    logo.create_polygon(24, 2, 34, 12, 24, 12, fill="#93B4F5", outline="")
-    logo.create_text(18, 28, text="PDF", fill="#FFFFFF", font=F(8, "bold"))
+    logo = tk.Label(hin, image=ico48, bg=C["header"], bd=0)
     logo.pack(side="left")
     titles = tk.Frame(hin, bg=C["header"])
     titles.pack(side="left", padx=14)
     tk.Label(titles, text=APP_NAME, font=F(16, "bold"), fg="#FFFFFF", bg=C["header"]).pack(anchor="w")
     tk.Label(titles, text="Allégez vos PDF sur votre ordinateur, sans rien envoyer en ligne.",
              font=F(10), fg=C["faint"], bg=C["header"]).pack(anchor="w")
-    tk.Label(hin, text=f"v{VERSION}", font=F(9), fg=C["faint"], bg=C["header"]).pack(side="right", anchor="n")
 
     # ---- pied : progression + bouton principal (emballé avant le corps pour rester visible)
     footer = tk.Frame(root, bg=C["card"], highlightthickness=1, highlightbackground=C["border"])
