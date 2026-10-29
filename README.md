@@ -7,14 +7,18 @@ Utilitaire portable (Windows / Linux) pour compresser des PDF. Un seul fichier, 
 ## Utilisation
 
 **Interface graphique** : double-cliquez sur `pdfcompress` (Linux) ou `pdfcompress.exe` (Windows).
-Glissez vos PDF (ou un dossier) dans la fenetre, ou ajoutez-les par le bouton. Choisissez le niveau, cliquez sur *Compresser*. Les fichiers compresses sont
+Glissez vos PDF (ou un dossier) dans la fenetre, ou ajoutez-les par les boutons *Ajouter des PDF* et *Dossier*.
+Un dossier est parcouru avec tous ses sous-dossiers ; les fichiers deja compresses (`*_compresse.pdf`) sont ignores.
+Choisissez le niveau, cliquez sur *Compresser*. Les fichiers compresses sont
 enregistres a cote des originaux avec le suffixe `_compresse` (ou dans le dossier choisi).
+Si deux PDF de meme nom vont dans le meme dossier, le second devient `nom_compresse (2).pdf` : rien n'est ecrase.
 
 **Ligne de commande** :
 
 ```
 pdfcompress fichier.pdf                       # niveau moyen -> fichier_compresse.pdf
 pdfcompress a.pdf b.pdf -n forte -o sortie/   # plusieurs fichiers vers un dossier
+pdfcompress MesDocuments/ -n forte -o sortie/ # tout un dossier, sous-dossiers inclus
 pdfcompress scan.pdf -n extreme -g -o petit.pdf
 ```
 
@@ -36,7 +40,7 @@ passe sont refuses. L'original n'est jamais modifie.
 
 - **Windows** : installer Python 3.10+ (python.org), puis double-cliquer sur `build_windows.bat`.
 - **Linux** : `sudo apt install python3-tk python3-venv binutils` puis `./build_linux.sh`.
-- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.1.0` ;
+- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.2.0` ;
   `.github/workflows/build.yml` construit les executables a chaque push sur `main` et les publie
   dans la release `v<VERSION>` (version lue dans `pdfcompress.py`).
 
