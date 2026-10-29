@@ -1,8 +1,21 @@
 # PDF Compress
 
-Utilitaire portable (Windows / Linux) pour compresser des PDF. Un seul fichier, aucune installation.
+Utilitaire (Windows / Linux) pour compresser des PDF : portable (un seul fichier) ou installe sous
+Windows avec un menu clic droit.
 
 *D'après une proposition de Marie.*
+
+## Installation Windows (clic droit)
+
+Lancez `pdfcompress-installation.exe` (aucun droit administrateur requis). L'installateur ajoute :
+
+- **« Compresser avec PDF Compress »** au clic droit sur un ou plusieurs PDF, et sur un dossier
+  (sous-dossiers inclus). Plusieurs fichiers selectionnes s'ouvrent dans **une seule fenetre**.
+- **PDF Compress** dans le menu *Envoyer vers* (pratique pour plus de 15 fichiers d'un coup).
+- un raccourci dans le menu Demarrer (et sur le bureau si demande).
+
+Sous Windows 11, l'entree se trouve dans *Afficher plus d'options* (ou `Maj` + clic droit).
+Tout est retire par *Parametres > Applications > PDF Compress > Desinstaller*.
 
 ## Utilisation
 
@@ -40,9 +53,11 @@ passe sont refuses. L'original n'est jamais modifie.
 
 - **Windows** : installer Python 3.10+ (python.org), puis double-cliquer sur `build_windows.bat`.
 - **Linux** : `sudo apt install python3-tk python3-venv binutils` puis `./build_linux.sh`.
-- **Les deux automatiquement** : pousser ce dossier sur GitHub et creer un tag `v1.3.0` ;
-  `.github/workflows/build.yml` construit les executables a chaque push sur `main` et les publie
-  dans la release `v<VERSION>` (version lue dans `pdfcompress.py`).
+- **Installateur Windows** : installer Inno Setup 6, puis
+  `iscc /DMyAppVersion=1.4.0 installer\pdfcompress.iss` (apres la version dossier de `build_windows.bat`).
+- **Tout automatiquement** : chaque push sur `main` lance `.github/workflows/build.yml`, qui construit
+  les executables et l'installateur et les publie dans la release `v<VERSION>`
+  (version lue dans `pdfcompress.py`).
 
 PyInstaller ne fait pas de compilation croisee : l'executable Windows doit etre construit sous Windows
 (ou par la CI).
