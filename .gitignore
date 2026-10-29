@@ -1,0 +1,12 @@
+.venv/
+build/
+build-dir/
+dist/
+dist-dir/
+out/
+tmprun/
+tools/
+tests/
+*.spec
+build.log
+__pycache__/
