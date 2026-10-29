@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 python3 -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip wheel setuptools
-pip install "pymupdf>=1.24"
+pip install "pymupdf>=1.24" "tkinterdnd2>=0.4"
 PYINSTALLER_COMPILE_BOOTLOADER=1 pip install --no-binary pyinstaller --no-cache-dir "pyinstaller>=6.0"
 pyinstaller --onefile --windowed --noupx --name pdfcompress --exclude-module PIL --exclude-module numpy --noconfirm pdfcompress.py
 echo "Termine : dist/pdfcompress"

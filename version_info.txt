@@ -3,8 +3,8 @@
 # Un executable sans editeur ni description est juge plus suspect par les antivirus.
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 0, 0),
-    prodvers=(1, 0, 0, 0),
+    filevers=(1, 1, 0, 0),
+    prodvers=(1, 1, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -18,12 +18,12 @@ VSVersionInfo(
         '040C04B0',
         [StringStruct('CompanyName', 'appweb514-svg'),
         StringStruct('FileDescription', 'PDF Compress - compression de fichiers PDF'),
-        StringStruct('FileVersion', '1.0.0'),
+        StringStruct('FileVersion', '1.1.0'),
         StringStruct('InternalName', 'pdfcompress'),
         StringStruct('LegalCopyright', 'Licence AGPL-3.0 - code source : github.com/appweb514-svg/pdfcompress'),
         StringStruct('OriginalFilename', 'pdfcompress.exe'),
         StringStruct('ProductName', 'PDF Compress'),
-        StringStruct('ProductVersion', '1.0.0')])
+        StringStruct('ProductVersion', '1.1.0')])
       ]),
     VarFileInfo([VarStruct('Translation', [1036, 1200])])
   ]

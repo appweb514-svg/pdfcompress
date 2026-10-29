@@ -15,20 +15,20 @@ import threading
 import pymupdf
 
 APP_NAME = "PDF Compress"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 CREDIT = "D'après une proposition de Marie"
 
-# niveau -> (dpi cible, seuil dpi, qualité JPEG)
+# niveau -> (dpi cible, qualité JPEG)
 PRESETS = {
-    "faible": (200, 250, 85),
-    "moyenne": (130, 160, 70),
-    "forte": (90, 110, 50),
-    "extreme": (72, 80, 35),
+    "faible": (200, 75),
+    "moyenne": (150, 55),
+    "forte": (110, 40),
+    "extreme": (72, 30),
 }
 PRESET_LABELS = {
     "faible": "Faible - meilleure qualité (200 dpi)",
-    "moyenne": "Moyenne - recommandé (130 dpi)",
-    "forte": "Forte - écran / e-mail (90 dpi)",
+    "moyenne": "Moyenne - recommandé (150 dpi)",
+    "forte": "Forte - écran / e-mail (110 dpi)",
     "extreme": "Extrême - plus petit possible (72 dpi)",
 }
 
@@ -46,6 +46,54 @@ def default_output(path: str) -> str:
     return base + "_compresse.pdf"
 
 
+def _downsample_images(doc, dpi: int, quality: int, grayscale: bool) -> set:
+    """Réduit chaque photo à la résolution exacte voulue et la recompresse en JPEG.
+
+    PyMuPDF ne sait réduire que par moitiés ; ici on calcule la taille exacte à
+    partir de la taille affichée sur la page. Renvoie les xref traités.
+    Les images à transparence, 1 bit ou exotiques sont laissées à rewrite_images.
+    """
+    done, seen = set(), set()
+    for page in doc:
+        for im in page.get_images(full=True):
+            xref, smask, bpc = im[0], im[1], im[4]
+            if xref in seen:
+                continue
+            seen.add(xref)
+            if smask or bpc != 8:
+                continue
+            try:
+                # plus grande taille d'affichage sur l'ensemble du document
+                width_pt = 0.0
+                for pg in doc:
+                    for r in pg.get_image_rects(xref):
+                        width_pt = max(width_pt, r.width, r.height * im[2] / max(im[3], 1))
+                if width_pt <= 0:
+                    continue
+                pix = pymupdf.Pixmap(doc, xref)
+                eff = pix.width / (width_pt / 72)
+                recolor = grayscale and pix.colorspace is not None and pix.colorspace.n != 1
+                if eff <= dpi * 1.15 and not recolor:
+                    continue
+                if pix.alpha:
+                    pix = pymupdf.Pixmap(pix, 0)
+                if grayscale and (pix.colorspace is None or pix.colorspace.n != 1):
+                    pix = pymupdf.Pixmap(pymupdf.csGRAY, pix)
+                elif pix.colorspace is None or pix.colorspace.n not in (1, 3):
+                    pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+                if eff > dpi * 1.15:
+                    k = dpi / eff
+                    pix = pymupdf.Pixmap(pix, max(1, round(pix.width * k)), max(1, round(pix.height * k)), None)
+                data = pix.tobytes("jpg", jpg_quality=quality)
+                if len(data) >= len(doc.xref_stream_raw(xref) or b""):
+                    continue
+                page.replace_image(xref, stream=data)
+                done.add(xref)
+            except Exception:  # noqa: BLE001 - image exotique : on la laisse
+                continue
+    return done
+
+
 def compress_pdf(src: str, dst: str, level: str = "moyenne", grayscale: bool = False) -> dict:
     """Compresse src vers dst. Renvoie un dict avec les tailles.
 
@@ -56,7 +104,7 @@ def compress_pdf(src: str, dst: str, level: str = "moyenne", grayscale: bool = F
         raise ValueError(f"Niveau inconnu : {level}")
     if os.path.abspath(src) == os.path.abspath(dst):
         raise ValueError("Le fichier de sortie doit être différent du fichier d'origine.")
-    dpi_target, dpi_threshold, quality = PRESETS[level]
+    dpi_target, quality = PRESETS[level]
     before = os.path.getsize(src)
 
     doc = pymupdf.open(src)
@@ -65,10 +113,14 @@ def compress_pdf(src: str, dst: str, level: str = "moyenne", grayscale: bool = F
             raise ValueError("PDF protégé par mot de passe : impossible de le compresser.")
         if not doc.is_pdf:
             raise ValueError("Ce fichier n'est pas un PDF.")
-        # 1. images : rééchantillonnage + recompression JPEG
+        # 1. images : réduction précise + JPEG, puis rewrite_images pour le reste
+        try:
+            _downsample_images(doc, dpi_target, quality, grayscale)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             doc.rewrite_images(
-                dpi_threshold=dpi_threshold,
+                dpi_threshold=round(dpi_target * 1.15) + 1,
                 dpi_target=dpi_target,
                 quality=quality,
                 lossy=True,
@@ -78,7 +130,7 @@ def compress_pdf(src: str, dst: str, level: str = "moyenne", grayscale: bool = F
                 gray=True,
                 set_to_gray=grayscale,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass  # PDF exotique : on garde au moins le nettoyage ci-dessous
         # 2. polices : ne garder que les glyphes utilisés
         try:
@@ -196,7 +248,22 @@ def gui() -> None:
         "header": "#0F172A", "ok": "#15803D", "err": "#B91C1C", "stripe": "#F8FAFC",
     }
 
-    root = tk.Tk()
+    # glisser-déposer : tkinterdnd2 si disponible, sinon simple sélection par clic
+    dnd = None
+    try:
+        from tkinterdnd2 import DND_FILES, TkinterDnD
+        root = TkinterDnD.Tk()
+        dnd = DND_FILES
+    except Exception:  # noqa: BLE001 - tkdnd absent : fenêtre Tk classique
+        dnd = None
+        bad = tk._default_root
+        if bad is not None:
+            try:
+                bad.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+        tk._default_root = None
+        root = tk.Tk()
     root.withdraw()
     root.title(f"{APP_NAME} {VERSION}")
     root.configure(bg=C["bg"])
@@ -209,7 +276,7 @@ def gui() -> None:
         return (base, size, weight)
 
     # icône de fenêtre dessinée (pas de fichier externe)
-    ico = tk.PhotoImage(width=32, height=32)
+    ico = tk.PhotoImage(master=root, width=32, height=32)
     ico.put(C["accent"], to=(5, 2, 27, 30))
     ico.put(C["accent_hover"], to=(20, 2, 27, 9))
     for y in (12, 17, 22):
@@ -354,7 +421,7 @@ def gui() -> None:
         empty.create_polygon(cx - 15, cy - 48, cx + 7, cy - 48, cx + 15, cy - 40, cx + 15, cy - 12,
                              cx - 15, cy - 12, fill=C["card"], outline=C["accent"], width=2)
         empty.create_line(cx, cy - 18, cx, cy - 40, fill=C["accent"], width=2, arrow="last")
-        empty.create_text(cx, cy + 10, text="Cliquez ici pour choisir des PDF",
+        empty.create_text(cx, cy + 10, text=("Glissez vos PDF ici, ou cliquez pour les choisir" if dnd else "Cliquez ici pour choisir des PDF"),
                           font=F(12, "bold"), fill=C["ink"])
         empty.create_text(cx, cy + 32, text="Plusieurs fichiers à la fois · l'original n'est jamais modifié",
                           font=F(9), fill=C["muted"])
@@ -424,14 +491,22 @@ def gui() -> None:
             count_lbl.configure(text="")
         restripe()
 
-    def add():
+    def add_paths(paths):
+        """Ajoute des PDF (ou les PDF d'un dossier) à la liste, sans doublon."""
         if state["busy"]:
-            return
-        sel = filedialog.askopenfilenames(parent=root, title="Choisir des PDF",
-                                          filetypes=[("PDF", "*.pdf *.PDF"), ("Tous les fichiers", "*.*")])
-        known = set(files.values())
-        for f in sel:
+            return 0
+        pdfs = []
+        for f in paths:
             f = os.path.abspath(f)
+            if os.path.isdir(f):
+                for name in sorted(os.listdir(f)):
+                    if name.lower().endswith(".pdf") and os.path.isfile(os.path.join(f, name)):
+                        pdfs.append(os.path.join(f, name))
+            elif os.path.isfile(f):
+                pdfs.append(f)
+        known = set(files.values())
+        added = 0
+        for f in pdfs:
             if f in known:
                 continue
             known.add(f)
@@ -441,10 +516,45 @@ def gui() -> None:
                 size = "?"
             iid = tree.insert("", "end", values=(os.path.basename(f), size, "   En attente"))
             files[iid] = f
-        if sel:
+            added += 1
+        if added:
             status.set("Choisissez un niveau, puis cliquez sur Compresser.")
             status_lbl.configure(fg=C["muted"])
         show_list()
+        return added
+
+    def add():
+        if state["busy"]:
+            return
+        sel = filedialog.askopenfilenames(parent=root, title="Choisir des PDF",
+                                          filetypes=[("PDF", "*.pdf *.PDF"), ("Tous les fichiers", "*.*")])
+        add_paths(sel)
+
+    def on_drop(e):
+        hover_empty(False)
+        paths = [x for x in root.tk.splitlist(e.data)]
+        pdfs = [x for x in paths if os.path.isdir(x) or x.lower().endswith(".pdf")]
+        if not pdfs:
+            status.set("Seuls les fichiers PDF peuvent être déposés.")
+            status_lbl.configure(fg=C["err"])
+            return e.action
+        add_paths(pdfs)
+        return e.action
+
+    globals()["_TEST_DROP"] = on_drop  # point d'entrée pour les tests
+
+    if dnd:
+        for w in (root, empty, tree):
+            try:
+                w.drop_target_register(dnd)
+                w.dnd_bind("<<Drop>>", on_drop)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            empty.dnd_bind("<<DropEnter>>", lambda e: (hover_empty(True), e.action)[1])
+            empty.dnd_bind("<<DropLeave>>", lambda e: (hover_empty(False), e.action)[1])
+        except Exception:  # noqa: BLE001
+            pass
 
     def remove():
         if state["busy"]:
@@ -493,8 +603,8 @@ def gui() -> None:
     grid.pack(fill="x", padx=16, pady=(0, 16))
     levels = [
         ("faible", "Faible", "Meilleure qualité", "200 dpi"),
-        ("moyenne", "Moyenne", "Recommandé", "130 dpi"),
-        ("forte", "Forte", "Écran, e-mail", "90 dpi"),
+        ("moyenne", "Moyenne", "Recommandé", "150 dpi"),
+        ("forte", "Forte", "Écran, e-mail", "110 dpi"),
         ("extreme", "Extrême", "Le plus léger", "72 dpi"),
     ]
     tiles = {}
