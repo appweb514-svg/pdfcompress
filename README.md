@@ -2,8 +2,6 @@
 
 Utilitaire portable (Windows / Linux) pour compresser des PDF. Un seul fichier, aucune installation.
 
-*D'après une proposition de Marie.*
-
 ## Utilisation
 
 **Interface graphique** : double-cliquez sur `pdfcompress` (Linux) ou `pdfcompress.exe` (Windows).
