@@ -1,4 +1,4 @@
-; Installateur Windows de PDF Compress (Inno Setup 6).
+﻿; Installateur Windows de PDF Compress (Inno Setup 6).
 ; Installe pour l'utilisateur courant, sans droits administrateur, et ajoute :
 ;   - "Compresser avec PDF Compress" au clic droit sur les PDF et les dossiers ;
 ;   - "PDF Compress" dans le menu Envoyer vers (pratique pour plus de 15 fichiers) ;
