@@ -15,7 +15,7 @@ import threading
 import pymupdf
 
 APP_NAME = "PDF Compress"
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 CREDIT = "D'après une proposition de Marie"
 
 # Icône PDF (PNG encodé en base64, générée par tools/make_icon.py)
@@ -285,7 +285,11 @@ def _pct(before: int, after: int) -> str:
     return f"{gain:.1f}" if gain >= 99.5 else f"{gain:.0f}"
 
 
-def gui() -> None:
+def gui(initial: list[str] | None = None, spool: str | None = None, lock=None) -> None:
+    """Interface graphique. `initial` : fichiers à charger d'emblée (clic droit).
+    `spool` : dossier d'attente surveillé pour les fichiers des lancements suivants.
+    `lock` : verrou d'instance, gardé tant que la fenêtre est ouverte."""
+    _keep_lock = lock  # noqa: F841 - le verrou vit aussi longtemps que la fenêtre
     import tkinter as tk
     import tkinter.font as tkfont
     from tkinter import filedialog, messagebox, ttk
@@ -838,7 +842,48 @@ def gui() -> None:
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.bind("<Control-o>", lambda e: add())
 
+    def bring_front():
+        try:
+            if root.state() == "iconic":
+                root.deiconify()
+            root.lift()
+            root.attributes("-topmost", True)
+            root.after(300, lambda: root.attributes("-topmost", False))
+            root.focus_force()
+        except Exception:  # noqa: BLE001
+            pass
+
+    pending: list[str] = []
+
+    def receive(paths):
+        """Fichiers arrivés par le clic droit : ajoutés à la liste (ou mis de côté
+        si une compression est en cours)."""
+        if not paths:
+            return
+        if state["busy"]:
+            pending.extend(paths)
+            return
+        n = add_paths(paths)
+        if n:
+            status.set(f"{len(files)} PDF dans la liste. Choisissez un niveau, puis cliquez sur Compresser.")
+            status_lbl.configure(fg=C["muted"])
+        bring_front()
+
+    def poll_spool():
+        got = _spool_take(spool) if spool else []
+        if pending and not state["busy"]:
+            got = pending[:] + got
+            pending.clear()
+        receive(got)
+        root.after(250, poll_spool)
+
+    globals()["_TEST_RECEIVE"] = receive  # point d'entrée pour les tests
+
     show_list()
+    if initial:
+        add_paths(initial)
+    if spool:
+        root.after(100, poll_spool)
     root.update_idletasks()
     w = max(root.winfo_reqwidth(), 760)
     h = max(root.winfo_reqheight(), 660)
@@ -850,11 +895,124 @@ def gui() -> None:
     root.mainloop()
 
 
+# ------------------------------------------------- clic droit / instance unique
+#
+# L'Explorateur Windows lance le programme une fois par fichier sélectionné
+# ("--ouvrir chemin"). Pour tout regrouper dans UNE fenêtre, chaque lancement
+# dépose sa liste dans un dossier d'attente local ; la fenêtre ouverte (celle
+# qui détient le verrou) la récupère. Aucun port réseau : rien à autoriser
+# dans le pare-feu, rien de suspect pour un antivirus.
+
+def _spool_dir() -> str:
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".cache")
+    d = os.path.join(base, "PDFCompress", "attente")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+class _InstanceLock:
+    """Verrou de fichier non bloquant, libéré automatiquement à la fin du processus."""
+
+    def __init__(self, path: str):
+        self.path = path
+        self.fh = None
+
+    def acquire(self) -> bool:
+        fh = open(self.path, "a+")
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            fh.close()
+            return False
+        self.fh = fh
+        return True
+
+
+def _spool_put(spool: str, paths: list[str]) -> str:
+    import time
+    name = os.path.join(spool, f"{time.time_ns()}-{os.getpid()}.txt")
+    with open(name + ".tmp", "w", encoding="utf-8") as fh:
+        fh.write("\n".join(paths))
+    os.replace(name + ".tmp", name)
+    return name
+
+
+def _spool_take(spool: str) -> list[str]:
+    """Vide le dossier d'attente et renvoie les chemins qu'il contenait."""
+    out: list[str] = []
+    try:
+        names = sorted(n for n in os.listdir(spool) if n.endswith(".txt"))
+    except OSError:
+        return out
+    for n in names:
+        p = os.path.join(spool, n)
+        try:
+            with open(p, encoding="utf-8") as fh:
+                out += [line for line in fh.read().splitlines() if line.strip()]
+            os.remove(p)
+        except OSError:
+            pass
+    return out
+
+
+def _spool_clean(spool: str, max_age: float = 60.0) -> None:
+    """Supprime les dépôts abandonnés (plus d'une minute)."""
+    import time
+    now = time.time()
+    try:
+        for n in os.listdir(spool):
+            p = os.path.join(spool, n)
+            if now - os.path.getmtime(p) > max_age:
+                os.remove(p)
+    except OSError:
+        pass
+
+
+def open_in_window(paths: list[str]) -> int:
+    """Ouvre la fenêtre avec ces fichiers, ou les confie à la fenêtre déjà ouverte."""
+    import time
+    paths = [os.path.abspath(p) for p in paths if p]
+    try:
+        spool = _spool_dir()
+        lock = _InstanceLock(os.path.join(os.path.dirname(spool), "instance.lock"))
+    except OSError:  # dossier inaccessible : fenêtre autonome
+        gui(initial=paths)
+        return 0
+    mine = None
+    if paths:
+        if lock.acquire():  # personne d'autre : on ouvre la fenêtre nous-mêmes
+            _spool_clean(spool)
+            gui(initial=paths, spool=spool, lock=lock)
+            return 0
+        mine = _spool_put(spool, paths)
+    deadline = time.monotonic() + 5
+    while True:
+        if lock.acquire():
+            if mine is None:
+                _spool_clean(spool)
+            gui(spool=spool, lock=lock)  # reprend aussi notre dépôt
+            return 0
+        if mine is None:  # lancement normal alors qu'une fenêtre existe : 2e fenêtre
+            gui()
+            return 0
+        if not os.path.exists(mine) or time.monotonic() > deadline:
+            return 0  # la fenêtre ouverte a pris nos fichiers
+        time.sleep(0.15)
+
+
 def main() -> int:
-    if len(sys.argv) > 1:
-        return cli(sys.argv[1:])
-    gui()
-    return 0
+    args = sys.argv[1:]
+    if args and args[0] == "--ouvrir":  # menu clic droit de l'Explorateur
+        return open_in_window(args[1:])
+    if args:
+        return cli(args)
+    return open_in_window([])
 
 
 if __name__ == "__main__":
