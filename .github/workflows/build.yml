@@ -1,0 +1,98 @@
+name: build
+
+# Construit les executables Windows et Linux et les publie dans la release
+# v<VERSION> (VERSION lue dans pdfcompress.py) a chaque push sur main,
+# a chaque tag v* ou a la demande.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYINSTALLER_COMPILE_BOOTLOADER: "1"
+      COMMON: --windowed --noupx --name pdfcompress --exclude-module PIL --exclude-module numpy --noconfirm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Outils de compilation (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev
+
+      - name: Dependances (PyInstaller avec bootloader recompile)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install "pymupdf>=1.24"
+          python -m pip install --no-binary pyinstaller --no-cache-dir "pyinstaller>=6.0"
+
+      - name: Construire (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pyinstaller --onefile $COMMON --version-file version_info.txt pdfcompress.py
+          pyinstaller --onedir  $COMMON --version-file version_info.txt --distpath dist-dir --workpath build-dir pdfcompress.py
+          mkdir -p out
+          cp dist/pdfcompress.exe out/
+          (cd dist-dir && 7z a -tzip ../out/pdfcompress-windows-dossier.zip pdfcompress)
+
+      - name: Construire (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          pyinstaller --onefile $COMMON pdfcompress.py
+          mkdir -p out
+          cp dist/pdfcompress out/pdfcompress-linux
+          chmod +x out/pdfcompress-linux
+
+      - name: Test rapide
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ls -l out/pdfcompress.exe out/pdfcompress-windows-dossier.zip
+          else
+            ./out/pdfcompress-linux --version
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdfcompress-${{ runner.os }}
+          path: out/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: echo "version=$(sed -n 's/^VERSION = \"\(.*\)\"/\1/p' pdfcompress.py)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Empreintes SHA-256
+        run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          name: PDF Compress ${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            **Windows** : `pdfcompress.exe` (un seul fichier) ou `pdfcompress-windows-dossier.zip`
+            (a dezipper, puis lancer `pdfcompress\pdfcompress.exe` - moins souvent signale par les antivirus).
+            **Linux** : `pdfcompress-linux` (`chmod +x pdfcompress-linux` puis le lancer).
+            Empreintes dans `SHA256SUMS.txt`. Executables construits par GitHub Actions a partir de ce code source.
+          files: out/*
