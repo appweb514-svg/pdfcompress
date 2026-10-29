@@ -15,7 +15,7 @@ import threading
 import pymupdf
 
 APP_NAME = "PDF Compress"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 CREDIT = "D'après une proposition de Marie"
 
 # niveau -> (dpi cible, qualité JPEG)
@@ -44,6 +44,47 @@ def human(n: int) -> str:
 def default_output(path: str) -> str:
     base, _ = os.path.splitext(path)
     return base + "_compresse.pdf"
+
+
+def expand_pdfs(paths) -> list[str]:
+    """Transforme une liste de fichiers et de dossiers en liste de PDF.
+
+    Les dossiers sont parcourus avec leurs sous-dossiers. Les fichiers deja
+    compresses (*_compresse.pdf) trouves dans un dossier sont ignores, pour
+    ne pas recompresser un resultat precedent. Ordre stable, sans doublon.
+    """
+    out, seen = [], set()
+
+    def push(f):
+        f = os.path.abspath(f)
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+
+    for p in paths:
+        if os.path.isdir(p):
+            for d, subdirs, names in os.walk(p):
+                subdirs[:] = sorted(s for s in subdirs if not s.startswith("."))
+                for name in sorted(names, key=str.lower):
+                    low = name.lower()
+                    if low.endswith(".pdf") and not low.endswith("_compresse.pdf"):
+                        push(os.path.join(d, name))
+        elif os.path.isfile(p):
+            push(p)
+    return out
+
+
+def unique_path(path: str, taken: set) -> str:
+    """Renvoie `path`, ou `nom (2).pdf`, `nom (3).pdf`... s'il est deja pris
+    dans ce lot. Evite que deux PDF de meme nom s'ecrasent dans un meme
+    dossier de sortie."""
+    base, ext = os.path.splitext(path)
+    cand, i = path, 2
+    while os.path.normcase(os.path.abspath(cand)) in taken:
+        cand = f"{base} ({i}){ext}"
+        i += 1
+    taken.add(os.path.normcase(os.path.abspath(cand)))
+    return cand
 
 
 def _downsample_images(doc, dpi: int, quality: int, grayscale: bool) -> set:
@@ -181,7 +222,7 @@ def summary(r: dict) -> str:
 
 def cli(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="pdfcompress", description="Compresse des fichiers PDF.")
-    p.add_argument("fichiers", nargs="+", help="PDF à compresser")
+    p.add_argument("fichiers", nargs="+", help="PDF ou dossiers à compresser (sous-dossiers inclus)")
     p.add_argument("-n", "--niveau", choices=list(PRESETS), default="moyenne")
     p.add_argument("-o", "--sortie", help="fichier de sortie (un seul PDF) ou dossier")
     p.add_argument("-g", "--gris", action="store_true", help="convertir les images en niveaux de gris")
@@ -189,12 +230,23 @@ def cli(argv: list[str]) -> int:
     a = p.parse_args(argv)
     rc = 0
     for f in a.fichiers:
+        if not os.path.exists(f):
+            print(f"{f} : ERREUR - introuvable", file=sys.stderr)
+            rc = 1
+    pdfs = expand_pdfs(a.fichiers)
+    if not pdfs:
+        print("Aucun PDF trouvé.", file=sys.stderr)
+        return 1
+    single = len(pdfs) == 1 and not any(os.path.isdir(x) for x in a.fichiers)
+    taken: set = set()
+    for f in pdfs:
         if a.sortie and os.path.isdir(a.sortie):
             out = os.path.join(a.sortie, os.path.basename(default_output(f)))
-        elif a.sortie and len(a.fichiers) == 1:
+        elif a.sortie and single:
             out = a.sortie
         else:
             out = default_output(f)
+        out = unique_path(out, taken)
         try:
             print(summary(compress_pdf(f, out, a.niveau, a.gris)))
         except Exception as e:  # noqa: BLE001
@@ -495,15 +547,7 @@ def gui() -> None:
         """Ajoute des PDF (ou les PDF d'un dossier) à la liste, sans doublon."""
         if state["busy"]:
             return 0
-        pdfs = []
-        for f in paths:
-            f = os.path.abspath(f)
-            if os.path.isdir(f):
-                for name in sorted(os.listdir(f)):
-                    if name.lower().endswith(".pdf") and os.path.isfile(os.path.join(f, name)):
-                        pdfs.append(os.path.join(f, name))
-            elif os.path.isfile(f):
-                pdfs.append(f)
+        pdfs = expand_pdfs(paths)
         known = set(files.values())
         added = 0
         for f in pdfs:
@@ -529,6 +573,21 @@ def gui() -> None:
         sel = filedialog.askopenfilenames(parent=root, title="Choisir des PDF",
                                           filetypes=[("PDF", "*.pdf *.PDF"), ("Tous les fichiers", "*.*")])
         add_paths(sel)
+
+    def add_dir():
+        if state["busy"]:
+            return
+        d = filedialog.askdirectory(parent=root, title="Choisir un dossier de PDF (sous-dossiers inclus)",
+                                    mustexist=True)
+        if not d:
+            return
+        n = add_paths([d])
+        if not n:
+            status.set("Aucun nouveau PDF trouvé dans ce dossier.")
+            status_lbl.configure(fg=C["err"])
+        else:
+            status.set(f"{n} PDF ajouté{'s' if n > 1 else ''} depuis {os.path.basename(d) or d}.")
+            status_lbl.configure(fg=C["muted"])
 
     def on_drop(e):
         hover_empty(False)
@@ -593,6 +652,8 @@ def gui() -> None:
     clr_btn.pack(side="right")
     rm_btn = Btn(ftop, "Retirer", remove, "ghost")
     rm_btn.pack(side="right", padx=6)
+    dir_add_btn = Btn(ftop, "+  Dossier", add_dir, "soft")
+    dir_add_btn.pack(side="right", padx=(6, 0))
     add_btn = Btn(ftop, "+  Ajouter des PDF", add, "soft")
     add_btn.pack(side="right")
 
@@ -714,19 +775,21 @@ def gui() -> None:
         state["busy"] = on
         go.set_enabled(not on)
         go.configure(text="Compression…" if on else "Compresser")
-        for b in (add_btn, rm_btn, clr_btn, dir_btn, reset_btn):
+        for b in (add_btn, dir_add_btn, rm_btn, clr_btn, dir_btn, reset_btn):
             b.set_enabled(not on)
 
     def worker(items, lvl, g, d):
         tb = ta = ok = err = 0
         folder = d or None
         n = len(items)
+        taken: set = set()
         for i, (iid, f) in enumerate(items, 1):
             root.after(0, set_row, iid, "Compression…", "busy")
             root.after(0, status.set, f"Compression {i}/{n} : {os.path.basename(f)}")
             dst = default_output(f)
             if d:
                 dst = os.path.join(d, os.path.basename(dst))
+            dst = unique_path(dst, taken)
             try:
                 r = compress_pdf(f, dst, lvl, g)
                 tb += r["before"]
