@@ -8,7 +8,7 @@ cd /d %~dp0
 py -3 -m venv .venv || python -m venv .venv
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip wheel setuptools
-python -m pip install "pymupdf>=1.24"
+python -m pip install "pymupdf>=1.24" "tkinterdnd2>=0.4"
 if defined PYINSTALLER_COMPILE_BOOTLOADER (
   python -m pip install --no-binary pyinstaller --no-cache-dir "pyinstaller>=6.0"
 ) else (
